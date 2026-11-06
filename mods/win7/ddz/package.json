@@ -1,0 +1,1 @@
+{ "type": "module", "private": true, "description": "The 斗地主 server runs from here with node: node server.mjs [port]" }

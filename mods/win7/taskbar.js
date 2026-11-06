@@ -12,7 +12,9 @@ import {
   A, FONT, DESK, TASKBAR, PLACES, fill, frost, own, icon, programIcon, terms, records, active, title,
   syncWindows, showWindow, minimizeWindow, toggleWindow, openMenu, openPopup,
   EXPLORER, CLAUDE_SEEN, claudeTitle, openExplorer, minimizeExplorer,
+  GAME, openGame, minimizeGame, perform,
 } from "./kit.js";
+import { DdzLink, ddz } from "./ddz/net.js";
 
 export const START_W = 404, START_H = 532;
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
@@ -34,13 +36,18 @@ export default class Taskbar {
       cx.notify();
     });
     // Keys: "win7.start" opens the Start menu (bind ctrl-escape to it in keys.json),
-    // "win7.desktop" is Show desktop, "win7.explorer" opens 计算机.
+    // "win7.desktop" is Show desktop, "win7.explorer" opens 计算机, "win7.game" 斗地主.
     cx.spawn(async (cx) => {
       for (;;) {
         const c = await nextCommand();
         if (c === "start") this.toggleStart();
         if (c === "desktop") this.showDesktop(terms());
         if (c === "explorer") openExplorer(null);
+        if (c === "game") openGame();
+        // 斗地主 from keys: host a room with the defaults, add a computer player, start.
+        if (c === "ddz_host") perform({ ddz: { t: "_host", tokens: 1000, ante: 10 }, game: true });
+        if (c === "ddz_bot") perform({ ddz: { t: "bot" } });
+        if (c === "ddz_start") perform({ ddz: { t: "start" } });
         cx.notify();
       }
     });
@@ -65,6 +72,10 @@ export default class Taskbar {
     // Windows from before (another layout, the last build of this mod) are gone or stale.
     syncWindows(true);
     if (shared(EXPLORER)?.open) openExplorer();
+    if (shared(GAME)?.open) openGame();
+    // The 斗地主 table: this copy holds the connection, so the game window can close.
+    this.ddz = new DdzLink();
+    this.ddz.start(cx);
   }
 
   pollClaude(cx) {
@@ -181,6 +192,22 @@ export default class Taskbar {
           .child(div().flex_1().min_w(0).truncate().text_size(12).text_color("#ffffff").child(name))));
   }
 
+  game(front) {
+    const rec = shared(GAME);
+    const id = "tb-game";
+    const hot = this.hot === id;
+    const s = ddz().state;
+    // Your turn while the window is down or behind: flash like a program wanting attention.
+    const yours = s && s.turn === s.you && !s.seats?.[s.you]?.auto && (!rec.open || front !== "game");
+    return own(h_flex().id(id)).flex_1().min_w(44).max_w(168).cursor_pointer().tooltip(yours ? "斗地主 - 轮到你了" : "斗地主")
+      .on_hover((on, cx) => { this.hot = on ? id : this.hot === id ? null : this.hot; cx.notify(); })
+      .on_click((_e, cx) => { if (rec.open && front === "game") minimizeGame(); else openGame(); cx.notify(); })
+      .child(this.face(h_flex().w_full(), { hot, lit: hot || (rec.open && front === "game"), status: yours ? "blocked" : null, running: true, W: 168, H: TASKBAR - 4 })
+        .child(h_flex().relative().size_full().px(7).gap(7).items_center()
+          .child(icon("cards", 24))
+          .child(div().flex_1().min_w(0).truncate().text_size(12).text_color("#ffffff").child(yours ? "斗地主 · 轮到你" : "斗地主"))));
+  }
+
   jumpList(p, b) {
     const act = this.launcher(p);
     const items = [{ label: p.program?.shell ? "Windows PowerShell" : p.program?.name ?? "程序", bold: true, act, disabled: !act }];
@@ -264,7 +291,8 @@ export default class Taskbar {
     return live.map((p) => (this.done.has(p.terminal) ? { ...p, status: "done" } : p));
   }
 
-  render(_cx) {
+  render(cx) {
+    this.ddz?.pump(cx);
     const front = active();
     const live = this.finished(syncWindows(), front);
     const d = this.desk();
@@ -277,6 +305,7 @@ export default class Taskbar {
       .child(h_flex().relative().flex_1().min_w(0).h_full().items_center().gap(3).pl(2).pr(4).overflow_hidden()
         .child(this.pinned())
         .when(Boolean(shared(EXPLORER)), (el) => el.child(this.explorer(front)))
+        .when(Boolean(shared(GAME)), (el) => el.child(this.game(front)))
         .children(live.map((p) => this.button(p, front))))
       .child(this.tray(live));
   }

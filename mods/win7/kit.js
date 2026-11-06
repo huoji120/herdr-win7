@@ -65,7 +65,9 @@ export function windowSpot(t, max) {
   // Herdr keeps where a window was dropped; before its first drop, where it opened.
   const p = shared(PLACES)?.[`win7:${t}`];
   if (p) return { x: p[0], y: p[1] };
-  return (t === "explorer" ? shared(EXPLORER)?.at : records()[t]?.at) ?? null;
+  if (t === "explorer") return shared(EXPLORER)?.at ?? null;
+  if (t === "game") return shared(GAME)?.at ?? null;
+  return records()[t]?.at ?? null;
 }
 
 /** A window's size, as its overlay share of the app window. */
@@ -324,6 +326,36 @@ export function closeExplorer() {
   setShared(EXPLORER, null);
 }
 
+// ---- the 斗地主 window: the table is ddz/table.js, the connection ddz/net.js (kept by the taskbar)
+
+export const GAME = "win7.game";
+export const GAME_W = 980, GAME_H = 690;
+
+export function openGame(o = {}) {
+  const rec = shared(GAME) ?? {};
+  const z = zoom();
+  const max = o.max ?? rec.max ?? false;
+  const d = shared(DESK);
+  if (rec.id && (rec.max || max)) closeOverlay(rec.id);
+  const id = openOverlay(max
+    ? { mod: "win7", kind: "window", frame: "none", width: d ? d.w / z : 1, height: d ? d.h / z : 0.95, at: { x: 0, y: 0 }, props: { role: "ddz", max: true } }
+    : { mod: "win7", kind: "window", frame: "none", key: "win7:game", width: GAME_W / z, height: GAME_H / z, at: { x: 180, y: 20 }, props: { role: "ddz" } });
+  setShared(GAME, { ...rec, id, open: true, max, at: { x: 180, y: 20 } });
+  raise("game");
+}
+
+export function minimizeGame() {
+  const rec = shared(GAME);
+  if (rec?.id) closeOverlay(rec.id);
+  if (rec) setShared(GAME, { ...rec, id: null, open: false });
+}
+
+export function closeGame() {
+  const rec = shared(GAME);
+  if (rec?.id) closeOverlay(rec.id);
+  setShared(GAME, null);
+}
+
 // ---- actions in props (menus and lists carry these, not functions)
 
 /**
@@ -335,6 +367,10 @@ export function perform(act) {
   if (act.run) run(act.run[0], act.run[1] ?? {});
   if (act.explorer !== undefined) openExplorer(act.explorer);
   if (act.closeExplorer) closeExplorer();
+  if (act.game) openGame();
+  // To the 斗地主 table (ddz/net.js reads this queue).
+  if (act.ddz) setShared("win7.ddz.out", [...(shared("win7.ddz.out") ?? []), act.ddz]);
+  if (act.closeGame) closeGame();
   if (act.refresh) {
     setShared("win7.refresh", Date.now());
     syncWindows(true);

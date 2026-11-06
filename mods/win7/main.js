@@ -6,6 +6,7 @@
 //   edge     a window's side or bottom frame
 //   start    the Start menu
 //   explorer 计算机: spaces as drives, terminals as folders
+//   ddz      斗地主, a LAN card game (ddz/)
 //   menu     a context menu
 //   dialog   the box asking before closing windows
 
@@ -16,10 +17,11 @@ import Taskbar from "./taskbar.js";
 import TitleBar, { Edge } from "./frame.js";
 import StartMenu from "./start.js";
 import Explorer from "./explorer.js";
+import Table from "./ddz/table.js";
 import Menu from "./menu.js";
 import Dialog from "./dialog.js";
 
-const ROLES = { desktop: Desktop, taskbar: Taskbar, title: TitleBar, edge: Edge, start: StartMenu, explorer: Explorer, menu: Menu, dialog: Dialog };
+const ROLES = { desktop: Desktop, taskbar: Taskbar, title: TitleBar, edge: Edge, start: StartMenu, explorer: Explorer, ddz: Table, menu: Menu, dialog: Dialog };
 
 export default class Win7 extends View {
   init(p, cx) {

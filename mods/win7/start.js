@@ -80,6 +80,7 @@ export default class StartMenu {
     const list = v_flex().flex_1().min_h(0).pt(6).gap(0)
       .child(this.program("p-ps", icon("ps", 32), "Windows PowerShell", { run: ["tab.new", {}] }))
       .child(this.program("p-cmd", icon("cmd", 32), "命令提示符", { run: ["tab.new", { argv: ["cmd.exe"] }] }));
+    list.child(this.program("p-ddz", icon("cards", 32), "斗地主", { game: true }));
     for (const a of PINNED) list.child(this.program(`p-${a.key}`, programIcon(a, 32), a.name, { run: ["tab.new", { argv: a.run }] }));
     const more = this.agents.filter((a) => !PINNED.some((x) => x.key === a.key)).slice(0, 5);
     if (more.length) {

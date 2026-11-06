@@ -14,6 +14,7 @@ const ICONS = [
   ["ps", "Windows PowerShell", "ps", { run: ["tab.new", {}] }],
   ["cmd", "命令提示符", "cmd", { run: ["tab.new", { argv: ["cmd.exe"] }] }],
   ["control", "控制面板", "control", { run: ["app.settings", {}] }],
+  ["ddz", "斗地主", "cards", { game: true }],
 ];
 
 const MENU = [
