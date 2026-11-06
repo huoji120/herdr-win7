@@ -1,0 +1,14 @@
+{
+  "id": "win7-root", "type": "column", "theme": "win7",
+  "font": "Consolas", "font_size": 14, "ui_font": "Microsoft YaHei UI",
+  "terminal_padding": [4, 4], "terminal_opacity": 1,
+  "titlebar": "none", "movable": false,
+  "background": {"image": "mods/win7/wallpaper.svg", "fit": "cover"},
+  "preview": "mods/win7/preview.svg",
+  "children": [
+    {"id": "win7-desktop", "type": "block", "content": {"mod": "win7", "props": {"role": "desktop"}}},
+    {"id": "win7-taskbar", "type": "block", "size": {"px": 40}, "window_drag": true,
+     "background": {"gradient": ["#46698ed4", "#14283fe8"], "angle": 180},
+     "content": {"mod": "win7", "props": {"role": "taskbar"}}}
+  ]
+}
