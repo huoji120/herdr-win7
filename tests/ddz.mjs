@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import crypto from "node:crypto";
 import dgram from "node:dgram";
-import { analyze, beats, options, botPlay, botBid, power } from "../mods/win7/ddz/rules.js";
+import { analyze, beats, options, botPlay, botBid, botDouble, power } from "../mods/win7/ddz/rules.js";
 import { cipher } from "../mods/win7/ddz/aes.js";
 
 const assert = (c, m) => { if (!c) { console.error("FAIL:", m); process.exit(1); } };
@@ -51,6 +51,8 @@ assert(options([C(6), C(7, 1)], analyze([C(5), C(5, 1)]), W).some((o) => o.lengt
 assert(power(analyze([C(16), C(17)])) === 4, "rocket power");
 assert(botBid([C(16), C(17), C(15), C(15, 1), C(15, 2)], 0) === 3, "strong hand bids 3");
 assert(botPlay([C(3)], null, false, 17).length === 1, "bot leads");
+assert(botDouble([C(16), C(17), C(15), C(15, 1), ...many(9, 4)], false) === 4, "a strong farmer 超级加倍s");
+assert(botDouble([C(3), C(5)], false) === 1, "a weak hand doesn't double");
 console.log("rules ok");
 
 // ---- against the server
@@ -108,11 +110,14 @@ const done = new Promise((resolve, reject) => {
           console.log(`game ${games}: ${m.msg} 赖子 ${m.wild} ×${m.result.multiple} base ${m.result.base} ante ${m.result.ante}, delta ${m.result.delta.join("/")}, tokens ${m.seats.map((x) => x.tokens).join("/")}`);
           if (games === GAMES) { clearTimeout(timer); return resolve(); }
           if (games === GAMES - 2) { autoOn = true; send({ t: "auto", on: true }); }
+          // 超级加倍 can bankrupt someone: the host resets everyone's tokens.
+          if (m.seats.some((x) => x.tokens <= 0)) send({ t: "config", tokens: 500, ante: 5 });
           send({ t: "again" });
         }
       } else if (m.turn === m.you && !autoOn) {
         assert(m.deadline > 0, "a person's turn has a deadline");
         if (m.phase === "bid") send({ t: "bid", n: botBid(m.hand, m.bidTop, m.wild) });
+        else if (m.phase === "double") send({ t: "double", n: 4 });
         else {
           const against = m.lead ? null : m.last.combo;
           const cards = botPlay(m.hand, against, false, 17, m.wild);

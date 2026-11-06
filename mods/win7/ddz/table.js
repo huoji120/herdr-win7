@@ -19,6 +19,7 @@ import { ddz, ddzSend } from "./net.js";
 import { analyze, options, isRed, isWild, label, rank, rankLabel, SUITS, suit, NAMES, BOMB_NAMES } from "./rules.js";
 
 const CARD = { w: 62, h: 88, step: 27 };
+const DOUBLES = { 1: "不加倍", 2: "加倍", 4: "超级加倍" };
 const SMALL = { w: 42, h: 60, step: 17 };
 const TINY = { w: 30, h: 42, step: 12 };
 
@@ -181,11 +182,9 @@ export default class Table {
     ], 560);
   }
 
-  /** The command that seats an AI (Claude Code here) at this table through mcp.mjs. */
-  aiCommand(s) {
-    const d = ddz();
-    const host = s.host ? (s.ips[0] ?? "127.0.0.1") : d.addr.split(":")[0];
-    return `claude mcp add ddz -- node "${appHome()}/mods/win7/ddz/mcp.mjs" --host ${host}:${s.port} --password ${d.password ?? ""}`;
+  /** The command that hands your seat to an AI (Claude Code here) through mcp.mjs. */
+  aiCommand() {
+    return `claude mcp add ddz -- node "${appHome()}/mods/win7/ddz/mcp.mjs"`;
   }
 
   copy(text) {
@@ -223,10 +222,10 @@ export default class Table {
       v_flex().gap(6).children(rows),
       v_flex().gap(4).p(8).rounded(4).bg("#eef4fb").border_1().border_color("#b8cde6")
         .child(h_flex().gap(8).items_center()
-          .child(div().text_color("#1e395b").child("让 AI 来打：在要上桌的那台电脑的 Claude Code 里加这个 MCP，再对它说「去斗地主」"))
+          .child(div().text_color("#1e395b").child("让 AI 替你打：在 Claude Code 里加这个 MCP，再对它说「替我打斗地主」，你在这里看着它打"))
           .child(div().flex_1())
-          .child(this.button("copy-ai", Date.now() - this.copied < 3000 ? "已复制" : "复制命令", () => this.copy(this.aiCommand(s)), { w: 80, h: 24, size: 12 })))
-        .child(div().text_size(11).text_color("#4d4d4d").child(this.aiCommand(s))),
+          .child(this.button("copy-ai", Date.now() - this.copied < 3000 ? "已复制" : "复制命令", () => this.copy(this.aiCommand()), { w: 80, h: 24, size: 12 })))
+        .child(div().text_size(11).text_color("#4d4d4d").child(this.aiCommand())),
       div().text_color("#1e395b").child(s.msg ?? ""),
       h_flex().gap(8).items_center()
         .when(s.host, (el) => el
@@ -252,6 +251,7 @@ export default class Table {
     if (!t) return div().h(size.h);
     if (t === "pass") return div().h(size.h).flex().items_center().text_size(20).text_color("#ffe9a8").child("不出");
     if (t.bid !== undefined) return div().h(size.h).flex().items_center().text_size(20).text_color("#ffe9a8").child(t.bid ? `${t.bid} 分` : "不叫");
+    if (t.double !== undefined) return div().h(size.h).flex().items_center().text_size(20).text_color(t.double === 4 ? "#ffcf3a" : "#ffe9a8").child(DOUBLES[t.double]);
     return this.fan(t.cards, size, { wild: s.wild, as: t.as });
   }
 
@@ -267,6 +267,8 @@ export default class Table {
       .child(h_flex().relative().gap(8).items_center().child(this.avatar(p, 40))
         .child(v_flex().min_w(0).child(div().truncate().text_color("#ffffff").child(p.name))
           .child(h_flex().gap(4).when(Boolean(role), (el) => el.child(role))
+            .when((s.doubles?.[i] ?? 1) > 1, (el) => el.child(this.pill(DOUBLES[s.doubles[i]], s.doubles[i] === 4 ? "#c9302c" : "#b8860b")))
+            .when(p.ai, (el) => el.child(this.pill("AI", "#7a3db8")))
             .when(p.auto && !p.bot, (el) => el.child(this.pill("托管", "#6d6d6d")))
             .when(!p.online, (el) => el.child(this.pill("掉线", "#c42b1c"))))))
       .child(h_flex().relative().gap(6).items_center()
@@ -300,7 +302,7 @@ export default class Table {
       const r = s.result;
       const win = (s.landlord === s.you) === r.landlordWins;
       return row.child(div().text_size(18).text_color(win ? "#ffe066" : "#ffffff").child(win ? "你赢了！" : "你输了"))
-        .child(div().text_color("#ffffff").child(`${r.landlordWins ? "地主" : "农民"}胜利${r.spring ? " · 春天" : ""} · ${r.base} 分 × ${r.multiple} 倍 × 底注 ${r.ante}`))
+        .child(div().text_color("#ffffff").child(`${r.landlordWins ? "地主" : "农民"}胜利${r.spring ? " · 春天" : ""} · ${r.base} 分 × ${r.multiple} 倍 × 底注 ${r.ante}${(r.doubles?.[s.you] ?? 1) > 1 ? ` · 你${DOUBLES[r.doubles[s.you]]}` : ""}`))
         .child(div().text_color(r.delta[s.you] >= 0 ? "#ffe066" : "#ffb3a8").font_weight(700).child(`${r.delta[s.you] >= 0 ? "+" : ""}${r.delta[s.you]}`))
         .child(this.button("again", "再来一局", () => ddzSend({ t: "again" }), { primary: true }));
     }
@@ -308,6 +310,10 @@ export default class Table {
       if (s.phase === "bid") {
         row.child(this.button("b0", "不叫", () => ddzSend({ t: "bid", n: 0 })));
         for (const n of [1, 2, 3]) row.child(this.button(`b${n}`, `${n} 分`, () => ddzSend({ t: "bid", n }), { disabled: n <= s.bidTop, primary: n === 3 }));
+      } else if (s.phase === "double") {
+        row.child(this.button("d1", "不加倍", () => ddzSend({ t: "double", n: 1 })))
+          .child(this.button("d2", "加倍 ×2", () => ddzSend({ t: "double", n: 2 })))
+          .child(this.button("d4", "超级加倍 ×4", () => ddzSend({ t: "double", n: 4 }), { primary: true, w: 120 }));
       } else {
         const against = s.lead ? null : s.last?.combo ?? null;
         const chosen = [...this.sel].filter((id) => s.hand.includes(id));
@@ -325,6 +331,7 @@ export default class Table {
           }, { primary: true, disabled: !c, w: c ? 130 : 86 }));
       }
     } else if (s.turn >= 0) row.child(div().text_color("#ffffffc0").child(`等待 ${s.seats[s.turn]?.name ?? ""}…`));
+    if (ddz().ai) row.child(div().px(8).py(2).rounded(4).bg("#7a3db8e0").text_color("#ffffff").child("AI 正在替你打（MCP）"));
     if (toast) row.child(div().px(8).py(2).rounded(4).bg("#c42b1ce0").text_color("#ffffff").child(toast));
     return row;
   }
@@ -350,7 +357,9 @@ export default class Table {
           .child(h_flex().relative().gap(8).items_center().child(this.avatar(me, 40))
             .child(v_flex().min_w(0).child(div().truncate().text_color("#ffffff").child(me.name))
               .child(h_flex().gap(4)
-                .when(s.landlord >= 0, (el) => el.child(s.landlord === s.you ? this.pill("地主", "#e2741a") : this.pill("农民", "#3d8b2f"))))))
+                .when(s.landlord >= 0, (el) => el.child(s.landlord === s.you ? this.pill("地主", "#e2741a") : this.pill("农民", "#3d8b2f")))
+                .when((s.doubles?.[s.you] ?? 1) > 1, (el) => el.child(this.pill(DOUBLES[s.doubles[s.you]], s.doubles[s.you] === 4 ? "#c9302c" : "#b8860b")))
+                .when(Boolean(me.ai), (el) => el.child(this.pill("AI", "#7a3db8"))))))
           .child(div().relative().text_color("#ffe9a8").child(`筹码 ${me.tokens}`))
           .when(mine && this.deadlineAt != null && s.phase !== "over", (el) => el.child(div().relative().text_color("#ffffff")
             .child(`剩余 ${Math.max(0, Math.ceil((this.deadlineAt - Date.now()) / 1000))} 秒`))))
@@ -398,6 +407,7 @@ export default class Table {
       { label: "牌型：单张 对子 三带 顺子 连对 飞机 四带二", disabled: true },
       { label: "赖子可当 3～2 任意点数（不能当王）", disabled: true },
       { label: "软炸 < 硬炸 < 赖子炸 < 王炸", disabled: true },
+      { label: "定完地主可加倍 ×2 或超级加倍 ×4（只算你和地主之间）", disabled: true },
       { label: "每回合 25 秒，超时两次自动托管", disabled: true },
     ];
     return v_flex().id("ddz").relative().size_full().font_family(FONT).text_size(13)

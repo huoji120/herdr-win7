@@ -4,7 +4,7 @@
 // room password (aes.js):
 //   → { t: "hello", name, key, ai? } { t: "ctl", key } { t: "config", tokens, ante }
 //     { t: "bot" } { t: "kick", seat } { t: "start" } { t: "bid", n } { t: "play", cards }
-//     { t: "pass" } { t: "auto", on } { t: "again" } { t: "bye" }
+//     { t: "double", n } { t: "pass" } { t: "auto", on } { t: "ai", on } { t: "again" } { t: "bye" }
 //   ← { t: "state", ... } (each seat its own view), { t: "error", msg }, { t: "ping" }
 // The server holds the cards, the rules and everyone's tokens; seat 0 is the
 // host and sets the starting tokens and the ante. Each deal turns up a 赖子.
@@ -19,7 +19,7 @@ import dgram from "node:dgram";
 import os from "node:os";
 import crypto from "node:crypto";
 import { cipher } from "./aes.js";
-import { analyze, readings, sortHand, botBid, botPlay, power, NAMES, BOMB_NAMES, rankLabel } from "./rules.js";
+import { analyze, readings, sortHand, botBid, botDouble, botPlay, power, NAMES, BOMB_NAMES, rankLabel } from "./rules.js";
 
 const PORT = Number(process.argv[2]) || 17777;
 const PASSWORD = process.argv[3] ?? "";
@@ -64,6 +64,7 @@ function view(i) {
     last: g?.last ? { seat: g.last.seat, combo: g.last.combo } : null,
     base: g?.base ?? 0,
     multiple: g ? 2 ** g.bombs : 1,
+    doubles: g?.doubles ?? [1, 1, 1],
     deadline: g && g.deadline && g.turn >= 0 ? Math.max(0, g.deadline - Date.now()) : null,
     result: g?.result ?? null,
     reveal: g?.phase === "over" ? g.hands.map((h) => sortHand(h, g.wild)) : null,
@@ -93,7 +94,7 @@ function deal() {
     phase: "bid", hands: [deck.slice(0, 17), deck.slice(17, 34), deck.slice(34, 51)], bottom: deck.slice(51),
     wild, turn: first, moves: 0, deadline: null,
     bids: 0, bidTop: 0, bidBy: -1, landlord: -1, base: 0,
-    last: null, passes: 0, table: [null, null, null], plays: [0, 0, 0], bombs: 0, result: null,
+    last: null, passes: 0, table: [null, null, null], plays: [0, 0, 0], bombs: 0, doubles: [1, 1, 1], result: null,
   };
   msg = `本局赖子是 ${rankLabel(wild)}，${nameOf(first)} 先叫分`;
 }
@@ -113,10 +114,31 @@ function bid(i, n) {
     g.landlord = l;
     g.base = g.bidTop;
     g.hands[l].push(...g.bottom);
-    g.phase = "play";
-    g.turn = l;
+    // 加倍: the farmers say first, then the landlord, each 不加倍 / 加倍 / 超级加倍.
+    g.phase = "double";
+    g.turn = (l + 1) % 3;
     g.table = [null, null, null];
-    msg = `${nameOf(l)} 是地主（${g.base} 分），请出牌`;
+    msg = `${nameOf(l)} 是地主（${g.base} 分），农民先选加倍`;
+  } else g.turn = (i + 1) % 3;
+  return null;
+}
+
+const DOUBLE_NAMES = { 1: "不加倍", 2: "加倍", 4: "超级加倍" };
+
+/** 加倍: n is 1, 2 (加倍) or 4 (超级加倍), on your own stake with the landlord. */
+function double(i, n) {
+  const g = game;
+  if (g?.phase !== "double" || g.turn !== i) return "还没轮到你";
+  if (![1, 2, 4].includes(n)) return "加倍只能是 1、2 或 4";
+  g.moves++;
+  g.doubles[i] = n;
+  g.table[i] = { double: n };
+  msg = `${nameOf(i)} ${DOUBLE_NAMES[n]}`;
+  if (i === g.landlord) {
+    g.phase = "play";
+    g.turn = g.landlord;
+    g.table = [null, null, null];
+    msg += `，${nameOf(g.landlord)} 出牌`;
   } else g.turn = (i + 1) % 3;
   return null;
 }
@@ -164,7 +186,10 @@ function pass(i) {
   return null;
 }
 
-/** Tokens change hands: base × multiple × ante a farmer, the landlord twice that; nobody pays more than they have. */
+/**
+ * Tokens change hands, farmer by farmer: base × multiple × ante × the
+ * landlord's 加倍 × that farmer's 加倍. Nobody pays more than they have.
+ */
 function finish(winner) {
   const g = game;
   const l = g.landlord;
@@ -172,25 +197,28 @@ function finish(winner) {
   const farmers = [0, 1, 2].filter((j) => j !== l);
   const spring = landlordWins ? farmers.every((j) => g.plays[j] === 0) : g.plays[l] === 1;
   const multiple = 2 ** g.bombs * (spring ? 2 : 1);
-  const unit = g.base * multiple * config.ante;
+  const stake = (f) => g.base * multiple * config.ante * g.doubles[l] * g.doubles[f];
   const delta = [0, 0, 0];
   if (landlordWins) {
     for (const f of farmers) {
-      const pay = Math.min(unit, seats[f].tokens);
+      const pay = Math.min(stake(f), seats[f].tokens);
       delta[f] -= pay;
       delta[l] += pay;
     }
   } else {
-    const total = Math.min(2 * unit, seats[l].tokens);
-    delta[l] -= total;
-    delta[farmers[0]] += Math.ceil(total / 2);
-    delta[farmers[1]] += Math.floor(total / 2);
+    const owed = farmers.map(stake);
+    const total = owed[0] + owed[1];
+    const paid = Math.min(total, seats[l].tokens);
+    const first = Math.round((paid * owed[0]) / total);
+    delta[l] -= paid;
+    delta[farmers[0]] += first;
+    delta[farmers[1]] += paid - first;
   }
   delta.forEach((d, j) => { seats[j].tokens += d; });
   g.phase = "over";
   g.turn = -1;
   g.deadline = null;
-  g.result = { landlordWins, spring, multiple, base: g.base, ante: config.ante, delta };
+  g.result = { landlordWins, spring, multiple, base: g.base, ante: config.ante, doubles: [...g.doubles], delta };
   const broke = seats.filter((s) => s.tokens <= 0).map((s) => s.name);
   msg = `${landlordWins ? "地主" : "农民"}胜利${spring ? "（春天！）" : ""}${broke.length ? `，${broke.join("、")} 破产了` : ""}`;
   return null;
@@ -211,6 +239,7 @@ function autoMove(i) {
 function move(i) {
   const g = game;
   if (g.phase === "bid") return bid(i, botBid(g.hands[i], g.bidTop, g.wild));
+  if (g.phase === "double") return double(i, botDouble(g.hands[i], i === g.landlord, g.wild));
   const last = g.last && g.last.seat !== i ? g.last : null;
   const mate = Boolean(last) && i !== g.landlord && last.seat !== g.landlord;
   const cards = botPlay(g.hands[i], last?.combo ?? null, mate, last ? g.hands[last.seat].length : 17, g.wild);
@@ -342,6 +371,13 @@ function handle(sock, m) {
       msg = s.auto ? `${s.name} 开启了托管` : `${s.name} 取消了托管`;
       break;
     case "bid": err = bid(i, m.n); if (!err) s.timeouts = 0; break;
+    case "double": err = double(i, Number(m.n)); if (!err) s.timeouts = 0; break;
+    case "ai":
+      // The player handed their seat to an AI (mcp.mjs through their client), or took it back.
+      s.ai = Boolean(m.on);
+      scheduled = null;
+      msg = s.ai ? `${s.name} 交给 AI 代打` : `${s.name} 收回了 AI 代打`;
+      break;
     case "play": err = play(i, m.cards); if (!err) s.timeouts = 0; break;
     case "pass": err = pass(i); if (!err) s.timeouts = 0; break;
     case "bye": s.sock?.end(); return;

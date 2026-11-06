@@ -290,6 +290,15 @@ export function botBid(hand, top, wild = null) {
   return bid > top ? bid : 0;
 }
 
+/** A computer player's 加倍: 1, 2 (加倍) or 4 (超级加倍), by how strong the hand is. */
+export function botDouble(hand, landlord, wild = null) {
+  const g = groups(hand, wild);
+  let s = hand.filter((id) => isWild(id, wild)).length * 2 + (g.has(17) ? 4 : 0) + (g.has(16) ? 3 : 0) + (g.get(15)?.length ?? 0) * 2;
+  for (const c of g.values()) if (c.length === 4) s += 4;
+  if (landlord) s -= 2; // the three bottom cards are already in
+  return s >= 13 ? 4 : s >= 9 ? 2 : 1;
+}
+
 /**
  * A computer player's (or 托管's) play: cards, or null to pass. `mate`: the
  * last play is a teammate's; `threat`: the card count of the player to beat.

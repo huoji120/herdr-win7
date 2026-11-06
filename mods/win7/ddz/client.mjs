@@ -8,7 +8,13 @@
 //   { t: "_join", addr, password, first? } { t: "_leave" } { t: "_scan" }
 //   and anything else goes to the table as is.
 // Everything the window shows is written to the state file (whole, atomically):
-//   { status, addr, password, error, toast, state, rooms, scanning, seq }
+//   { status, addr, password, error, toast, state, rooms, scanning, ai, control, seq }
+//
+// An AI plays *this* seat through mcp.mjs: it connects to the local control
+// port (control: { port, token } in the state file, 127.0.0.1 only), sends
+// { t: "_auth", token } and then the same commands, and gets every new state
+// pushed. While one is connected the seat is marked as AI-played (ai: true
+// here, and on the server, for its longer clock), and the window shows it.
 
 import net from "node:net";
 import dgram from "node:dgram";
@@ -25,14 +31,24 @@ const DISCOVERY_PORT = 17778;
 
 let view = { status: "idle", seq: 0 };
 let sock = null, box = null, gen = 0;
+const controls = new Set();
 
 function save(patch) {
   view = { ...view, ...patch, seq: view.seq + 1 };
+  for (const c of controls) { try { c.write(JSON.stringify({ t: "view", view }) + "\n"); } catch {} }
+  flush();
+}
+
+// On Windows a rename over a file someone is reading fails: try again shortly, the latest view wins.
+let retry = null;
+function flush() {
+  clearTimeout(retry);
   try {
     writeFileSync(`${FILE}.tmp`, JSON.stringify(view));
     renameSync(`${FILE}.tmp`, FILE);
   } catch (e) {
-    console.error(`写状态失败：${e?.message ?? e}`);
+    retry = setTimeout(flush, 40);
+    if (!["EPERM", "EBUSY", "EACCES"].includes(e?.code)) console.error(`写状态失败：${e?.message ?? e}`);
   }
 }
 
@@ -90,6 +106,7 @@ function join(addr, password, first, tries = 1) {
       sock = s;
       s.write(box.seal(JSON.stringify({ t: "hello", name: NAME, key: crypto.randomUUID() })) + "\n");
       if (first) s.write(box.seal(JSON.stringify(first)) + "\n");
+      if (controls.size) s.write(box.seal(JSON.stringify({ t: "ai", on: true })) + "\n");
       save({ status: "online" });
     });
     let buf = "", why = "";
@@ -122,9 +139,7 @@ function join(addr, password, first, tries = 1) {
   attempt(tries);
 }
 
-readline.createInterface({ input: process.stdin }).on("line", async (line) => {
-  let m;
-  try { m = JSON.parse(line.trim()); } catch { return; }
+async function command(m) {
   switch (m.t) {
     case "_join": return join(m.addr, m.password, m.first ?? null, m.tries ?? 1);
     case "_leave":
@@ -139,7 +154,49 @@ readline.createInterface({ input: process.stdin }).on("line", async (line) => {
     default:
       if (sock && box) sock.write(box.seal(JSON.stringify(m)) + "\n");
   }
+}
+
+readline.createInterface({ input: process.stdin }).on("line", (line) => {
+  try { command(JSON.parse(line.trim())); } catch {}
 });
 
-save({ status: "idle", state: null });
+// ---- the AI's way in (mcp.mjs), this machine only
+
+const TOKEN = crypto.randomUUID();
+
+function aiChanged() {
+  const on = controls.size > 0;
+  if (sock && box) sock.write(box.seal(JSON.stringify({ t: "ai", on })) + "\n");
+  save({ ai: on });
+}
+
+const control = net.createServer((c) => {
+  c.setEncoding("utf8");
+  let buf = "", authed = false;
+  c.on("data", (chunk) => {
+    buf += chunk;
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      let m;
+      try { m = JSON.parse(line); } catch { continue; }
+      if (!authed) {
+        if (m.t !== "_auth" || m.token !== TOKEN) return c.destroy();
+        authed = true;
+        controls.add(c);
+        c.write(JSON.stringify({ t: "view", view }) + "\n");
+        aiChanged();
+        continue;
+      }
+      command(m);
+    }
+  });
+  const gone = () => { if (controls.delete(c)) aiChanged(); };
+  c.on("close", gone);
+  c.on("error", gone);
+});
+control.listen(0, "127.0.0.1", () => save({ control: { port: control.address().port, token: TOKEN } }));
+
+save({ status: "idle", state: null, ai: false });
 console.log(`斗地主客户端已就绪（${NAME}），状态写在 ${FILE}`);

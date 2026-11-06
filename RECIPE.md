@@ -1,6 +1,6 @@
 # Herdr 7
 
-A Windows 7 Aero desktop for Herdr: every terminal is a draggable glass window over a blue "Harmony"-style wallpaper, with the superbar, the Start orb and menu, desktop icons, and a fake Explorer whose drives are spaces and whose folders are terminals, and a LAN 斗地主 (Dou Dizhu) card game that people and AI agents (through MCP) play together. UI text is Simplified Chinese, as on a zh-CN Windows 7.
+A Windows 7 Aero desktop for Herdr: every terminal is a draggable glass window over a blue "Harmony"-style wallpaper, with the superbar, the Start orb and menu, desktop icons, and a fake Explorer whose drives are spaces and whose folders are terminals, and a LAN 斗地主 (Dou Dizhu) card game whose seat an AI agent can play for you (through MCP) while you watch. UI text is Simplified Chinese, as on a zh-CN Windows 7.
 
 ![Herdr 7](preview.png)
 
@@ -12,7 +12,7 @@ A Windows 7 Aero desktop for Herdr: every terminal is a draggable glass window o
 - **Start menu** (404 × 532 frameless window above the orb): white left pane (PowerShell, 命令提示符, OMP, Pi pinned; installed agents below; 所有程序 lists spaces as folders), the search box, a glass right column (user, 文档, 图片, 下载, 计算机, 控制面板, 设备和打印机, 默认程序, 帮助和支持, 运行...), a 72 px picture frame overlapping the top edge, 关机 with an arrow menu.
 - **Explorer** (820 × 540): glass top with Back/Forward orbs, a breadcrumb address bar and a search box; command bar; navigation pane (计算机 and each space as a drive `name (C:)`); tiles (drives with a capacity bar = terminal count; folders with a program badge, status and cwd); details pane.
 
-- **斗地主** (980 × 690 game window, glass frame, 游戏 / 帮助 menu bar, green felt): a lobby (create a room with starting tokens, ante and password; rooms found on the LAN; join by address and password), a room (seats, the password and addresses for the host, computer players, the MCP command for AI players), and the table (the two others left and right with role, tokens, cards left and the turn clock; bottom cards, 赖子, base, multiple and ante on top; your hand of 62 × 88 cards with 叫分 or 不出 / 提示 / 出牌, and 托管).
+- **斗地主** (980 × 690 game window, glass frame, 游戏 / 帮助 menu bar, green felt): a lobby (create a room with starting tokens, ante and password; rooms found on the LAN; join by address and password), a room (seats, the password and addresses for the host, computer players, the MCP command that hands your seat to an AI), and the table (the two others left and right with role, tokens, cards left and the turn clock; bottom cards, 赖子, base, multiple and ante on top; your hand of 62 × 88 cards with 叫分, 不加倍 / 加倍 ×2 / 超级加倍 ×4, or 不出 / 提示 / 出牌, and 托管; a purple 「AI 正在替你打」 while an AI plays your seat).
 
 ## How it behaves
 
@@ -24,7 +24,7 @@ A Windows 7 Aero desktop for Herdr: every terminal is a draggable glass window o
 - Start: 关机 = `window.close` (terminals keep running); arrow menu: 切换用户 (`layout.switch`), 注销 (`layout.switch main`), 重新启动 (reopen every window), 睡眠 (`window.minimize`).
 - Claude Code started from a shell on Windows is recognized by its raw title (`hc get`, every 1.5 s): `✳` waiting, a braille spinner working.
 
-- 斗地主: bids of 1–3; each deal turns up a 赖子 rank that stands for any rank 3–2; bombs 软炸 < 硬炸 < 四赖子 < 王炸, each ×2, spring ×2. Tokens move base × multiple × ante per farmer (the landlord against both), never below zero. 25 s a turn (120 s for an AI seat): a timeout plays that turn by computer, two in a row turn on 托管; a dropped player is played by computer until they return under the same name. The taskbar button flashes orange on your turn.
+- 斗地主: bids of 1–3, then 加倍 (farmers first, the landlord last: ×1, ×2 or 超级加倍 ×4, on that player's stake with the landlord); each deal turns up a 赖子 rank that stands for any rank 3–2; bombs 软炸 < 硬炸 < 四赖子 < 王炸, each ×2, spring ×2. Tokens move farmer by farmer: base × multiple × ante × the landlord's 加倍 × that farmer's 加倍, never below zero. 25 s a turn (120 s while an AI plays the seat): a timeout plays that turn by computer, two in a row turn on 托管; a dropped player is played by computer until they return under the same name. The taskbar button flashes orange on your turn.
 
 ## Built from
 
@@ -36,7 +36,7 @@ A Windows 7 Aero desktop for Herdr: every terminal is a draggable glass window o
 - Calls: `panes`, `spaces`, `focused`, `knownAgents`, `hc`, `readTextFile`, `watchFolder`, `playSound`, `run` (`tab.new`, `space.new`, `pane.focus`, `pane.close`, `tab.rename`, `space.rename`, `app.settings`, `app.palette`, `app.help`, `layout.switch`, `window.*`). Runs `hc get <t> --json` for Claude detection; no network.
 - Art: `art/gen.mjs` (wallpaper, orb), hand-written SVGs in `mods/win7/icons/`.
 
-- 斗地主: `ddz/rules.js` (cards, plays with 赖子 readings, hints, computer players); `ddz/server.mjs` (node, TCP 17777, UDP discovery 17778, the authoritative table); `ddz/aes.js` (pure-JS AES-256-CTR + HMAC-SHA256, keys from the room password, byte for byte the same in node and the mod); `ddz/client.mjs` (node, the window's connection: JSON commands on stdin through `hc send`, state written to `data/ddz/state.json`); `ddz/net.js` (the taskbar side: starts ddz-client / ddz-server with `hc run --bg`, watches the state file); `ddz/table.js` (the window); `ddz/mcp.mjs` (MCP stdio server: ddz_rooms, ddz_join, ddz_state, ddz_wait, ddz_bid, ddz_play, ddz_pass, ddz_add_bot, ddz_start, ddz_again, ddz_auto, ddz_leave). Tests in `tests/`.
+- 斗地主: `ddz/rules.js` (cards, plays with 赖子 readings, hints, computer players); `ddz/server.mjs` (node, TCP 17777, UDP discovery 17778, the authoritative table); `ddz/aes.js` (pure-JS AES-256-CTR + HMAC-SHA256, keys from the room password, byte for byte the same in node and the mod); `ddz/client.mjs` (node, the window's connection: JSON commands on stdin through `hc send`, state written to `data/ddz/state.json`); `ddz/net.js` (the taskbar side: starts ddz-client / ddz-server with `hc run --bg`, watches the state file); `ddz/table.js` (the window); `ddz/mcp.mjs` (MCP stdio server that plays *your* seat: it connects to client.mjs's control port, 127.0.0.1 only, with the token from the state file, and the client tells the server the seat is AI-played; tools ddz_state, ddz_wait, ddz_bid, ddz_double, ddz_play, ddz_pass, ddz_rooms, ddz_join, ddz_add_bot, ddz_start, ddz_again, ddz_auto; its descriptions push 超级加倍). Tests in `tests/`.
 
 ## Watch out
 
