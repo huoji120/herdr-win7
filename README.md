@@ -1,7 +1,5 @@
 # Herdr 7（Windows 7 Aero）
 
-![Herdr 7](preview.png)
-
 一个 Windows 7 风格的 Herdr 桌面：`layouts/win7.json` + `themes/win7.json` + `mods/win7/`。
 只用官方 mod / layout / theme 接口，不改 Herdr 核心、内置 Win98 或快捷键。
 
@@ -86,6 +84,13 @@ Herdr 的 overlay 不能实时模糊背后的内容，但壁纸是固定的：�
 插件用 `hc send` 给它发命令，再读它写出的 `data/ddz/state.json`。所以插件重载或关掉游戏窗口都不会掉线。
 服务器是 `ddz/server.mjs`（后台终端 `ddz-server`），规则在 `ddz/rules.js`，加密在 `ddz/aes.js`，
 三方用的是同一份代码。测试：`node tests/aes.mjs`、`tests/ddz.mjs`、`tests/client.mjs`、`tests/mcp.mjs`。
+
+## 飞行棋（另一个 mod）
+
+装了 [herdr-fxq](https://github.com/heromantf/herdr-fxq)（`mods/fxq`）时，桌面和开始菜单里会多出「飞行棋」，
+双击打开它自己的游戏窗口；窗口开着或你在房间里时任务栏有它的按钮，显示房间人数或对局进度，
+轮到你而窗口没开时闪橙色，点一下打开或隐藏。没装就不显示。飞行棋本身的规则、联网和 MCP 都在那个 mod 里，
+这里只读它写的 `data/fxq/state.json`。
 
 ## 按键（可选）
 

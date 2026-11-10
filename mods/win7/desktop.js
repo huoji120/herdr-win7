@@ -7,6 +7,7 @@ import { div } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { shared, setShared } from "herdr";
 import { FONT, DESK, own, icon, shadowed, perform, openMenu } from "./kit.js";
+import { FXQ, FXQ_ICON } from "./fxq.js";
 
 const ICONS = [
   ["computer", "计算机", "computer", { explorer: null }],
@@ -15,6 +16,7 @@ const ICONS = [
   ["cmd", "命令提示符", "cmd", { run: ["tab.new", { argv: ["cmd.exe"] }] }],
   ["control", "控制面板", "control", { run: ["app.settings", {}] }],
   ["ddz", "斗地主", "cards", { game: true }],
+  ["fxq", "飞行棋", FXQ_ICON, { fxq: true }, () => Boolean(shared(FXQ)?.installed)],
 ];
 
 const MENU = [
@@ -37,6 +39,7 @@ export default class Desktop {
   }
 
   render(cx) {
+    const icons = ICONS.filter((x) => !x[4] || x[4]());
     const stamp = shared("win7.refresh") ?? null;
     if (stamp !== this.seen) {
       this.seen = stamp;
@@ -44,7 +47,7 @@ export default class Desktop {
       this.sel = null;
       cx.timer.after(160, (cx) => { this.blink = false; cx.notify(); });
     }
-    const cells = ICONS.map(([id, label, pic, act]) => {
+    const cells = icons.map(([id, label, pic, act]) => {
       const sel = this.sel === id, hot = this.hot === id;
       return own(v_flex().id(`d-${id}`)).w(78).py(4).px(2).gap(3).items_center().rounded(3).flex_none()
         .border_1().border_color(sel ? "#99d1ffb0" : hot ? "#ffffff50" : "#00000000")

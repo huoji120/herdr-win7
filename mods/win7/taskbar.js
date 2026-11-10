@@ -15,6 +15,7 @@ import {
   GAME, openGame, minimizeGame, perform,
 } from "./kit.js";
 import { DdzLink, ddz } from "./ddz/net.js";
+import { FXQ, FXQ_ICON, fxqOpen, toggleFxq, watchFxq } from "./fxq.js";
 
 export const START_W = 404, START_H = 532;
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
@@ -76,6 +77,8 @@ export default class Taskbar {
     // The 斗地主 table: this copy holds the connection, so the game window can close.
     this.ddz = new DdzLink();
     this.ddz.start(cx);
+    // 飞行棋 (its own mod): its table, for the taskbar button.
+    watchFxq(cx);
   }
 
   pollClaude(cx) {
@@ -208,6 +211,22 @@ export default class Taskbar {
           .child(div().flex_1().min_w(0).truncate().text_size(12).text_color("#ffffff").child(yours ? "斗地主 · 轮到你" : "斗地主"))));
   }
 
+  /** 飞行棋's button: while its window is open or you're at a table; a click opens or hides its window. */
+  fxq() {
+    const f = shared(FXQ) ?? {};
+    const open = fxqOpen();
+    const id = "tb-fxq";
+    const hot = this.hot === id;
+    const name = f.text ? `飞行棋 · ${f.text}` : "飞行棋";
+    return own(h_flex().id(id)).flex_1().min_w(44).max_w(168).cursor_pointer().tooltip(name)
+      .on_hover((on, cx) => { this.hot = on ? id : this.hot === id ? null : this.hot; cx.notify(); })
+      .on_click((_e, cx) => { toggleFxq(); cx.notify(); })
+      .child(this.face(h_flex().w_full(), { hot, lit: hot || open, status: f.yours && !open ? "blocked" : null, running: true, W: 168, H: TASKBAR - 4 })
+        .child(h_flex().relative().size_full().px(7).gap(7).items_center()
+          .child(icon(FXQ_ICON, 24))
+          .child(div().flex_1().min_w(0).truncate().text_size(12).text_color("#ffffff").child(name))));
+  }
+
   jumpList(p, b) {
     const act = this.launcher(p);
     const items = [{ label: p.program?.shell ? "Windows PowerShell" : p.program?.name ?? "程序", bold: true, act, disabled: !act }];
@@ -306,6 +325,7 @@ export default class Taskbar {
         .child(this.pinned())
         .when(Boolean(shared(EXPLORER)), (el) => el.child(this.explorer(front)))
         .when(Boolean(shared(GAME)), (el) => el.child(this.game(front)))
+        .when(Boolean(shared(FXQ)?.installed && (fxqOpen() || shared(FXQ)?.inRoom)), (el) => el.child(this.fxq()))
         .children(live.map((p) => this.button(p, front))))
       .child(this.tray(live));
   }

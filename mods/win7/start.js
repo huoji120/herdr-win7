@@ -6,6 +6,7 @@
 import { div, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { props, home, knownAgents, spaces, shared, setShared, closeOverlay } from "herdr";
+import { FXQ, FXQ_ICON } from "./fxq.js";
 import { FONT, DESK, fill, frost, transient, own, icon, glyph, programIcon, terms, title, showWindow, perform, openMenu, asset } from "./kit.js";
 
 const LEFT_W = 252, START_H = 532;
@@ -81,6 +82,7 @@ export default class StartMenu {
       .child(this.program("p-ps", icon("ps", 32), "Windows PowerShell", { run: ["tab.new", {}] }))
       .child(this.program("p-cmd", icon("cmd", 32), "命令提示符", { run: ["tab.new", { argv: ["cmd.exe"] }] }));
     list.child(this.program("p-ddz", icon("cards", 32), "斗地主", { game: true }));
+    if (shared(FXQ)?.installed) list.child(this.program("p-fxq", icon(FXQ_ICON, 32), "飞行棋", { fxq: true }));
     for (const a of PINNED) list.child(this.program(`p-${a.key}`, programIcon(a, 32), a.name, { run: ["tab.new", { argv: a.run }] }));
     const more = this.agents.filter((a) => !PINNED.some((x) => x.key === a.key)).slice(0, 5);
     if (more.length) {

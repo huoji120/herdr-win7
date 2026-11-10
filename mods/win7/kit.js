@@ -7,6 +7,7 @@
 
 import { div, image, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex } from "gpui-base";
+import { openFxq } from "./fxq.js";
 import { panes, spaces, focused, shared, setShared, openOverlay, closeOverlay, run, settings } from "herdr";
 
 export const A = "mods/win7";
@@ -16,7 +17,8 @@ export const DESK = "win7.desk";
 export const TASKBAR = 40;
 
 export const zoom = () => Number(settings()?.zoom) || 1;
-export const asset = (name) => `${A}/icons/${name}.svg`;
+/** An icon of this mod by name, or any image by its path in the home (another mod's). */
+export const asset = (name) => (name.includes("/") ? name : `${A}/icons/${name}.svg`);
 export const icon = (name, w, h = w) => image(asset(name)).w(w).h(h).flex_none();
 export const glyph = (name, w, h = w) => svg(asset(name)).w(w).h(h).flex_none();
 
@@ -371,6 +373,7 @@ export function perform(act) {
   // To the 斗地主 table (ddz/net.js reads this queue).
   if (act.ddz) setShared("win7.ddz.out", [...(shared("win7.ddz.out") ?? []), act.ddz]);
   if (act.closeGame) closeGame();
+  if (act.fxq) openFxq();
   if (act.refresh) {
     setShared("win7.refresh", Date.now());
     syncWindows(true);
